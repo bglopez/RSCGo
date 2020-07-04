@@ -12,6 +12,7 @@ package handlers
 import (
 	"strconv"
 
+	"github.com/spkaeros/rscgo/pkg/game"
 	"github.com/spkaeros/rscgo/pkg/game/net"
 	"github.com/spkaeros/rscgo/pkg/game/world"
 	"github.com/spkaeros/rscgo/pkg/log"
@@ -19,12 +20,12 @@ import (
 )
 
 func init() {
-	AddHandler("duelreq", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("duelreq", func(player *world.Player, p *net.Packet) {
 		if player.Busy() {
 			return
 		}
 		index := p.ReadUint16()
-		target, ok := world.Players.FromIndex(index)
+		target, ok := world.Players.FindIndex(index)
 		if !ok {
 			log.Suspicious.Printf("%v attempted to duel a player that does not exist.\n", player.String())
 			return
@@ -41,7 +42,8 @@ func init() {
 			return
 		}
 		player.SetDuelTarget(target)
-		if target.DuelTarget() != player {
+		player.Duel.Target = target
+		if target.Duel.Target != player {
 			player.Message("Sending duel request")
 			target.Message(player.Username() + " " + strutil.CombatPrefix(target.CombatDelta(player)) + "(level-" + strconv.Itoa(player.Skills().CombatLevel()) + ")@whi@ wishes to duel with you")
 			return
@@ -57,21 +59,21 @@ func init() {
 		target.ResetPath()
 		target.SendPacket(world.DuelOpen(player.Index))
 	})
-	AddHandler("duelupdate", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("duelupdate", func(player *world.Player, p *net.Packet) {
 		if !player.IsDueling() {
 			log.Suspicious.Printf("%v attempted to update a duel it was not in!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		target := player.DuelTarget()
+		target := player.Duel.Target
 		if target == nil {
 			log.Suspicious.Printf("%v attempted to update a duel with a non-existent target!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		if !target.IsDueling() || target.DuelTarget() != player {
+		if !target.IsDueling() || target.Duel.Target != player {
 			log.Suspicious.Printf("Players{ %v;2:%v } involved in duel with apparently bad state!\n", player.String(), target.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
@@ -93,7 +95,7 @@ func init() {
 		}
 		player.ResetDuelAccepted()
 		target.ResetDuelAccepted()
-		
+
 		player.DuelOffer.Clear()
 		defer func() {
 			target.SendPacket(world.DuelUpdate(player))
@@ -112,21 +114,21 @@ func init() {
 			player.DuelOffer.Add(p.ReadUint16(), p.ReadUint32())
 		}
 	})
-	AddHandler("dueloptions", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("dueloptions", func(player *world.Player, p *net.Packet) {
 		if !player.IsDueling() {
 			log.Suspicious.Printf("%v tried changing duel options in a duel that they are not in!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		target := player.DuelTarget()
+		target := player.Duel.Target
 		if target == nil {
 			log.Suspicious.Printf("%v involved in duel with no target!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		if !target.IsDueling() || target.DuelTarget() != player {
+		if !target.IsDueling() || target.Duel.Target != player {
 			log.Suspicious.Printf("Players{ 1:%v; 2:%v } involved in duel with apparently bad state!\n", player.String(), target.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
@@ -156,28 +158,28 @@ func init() {
 		//player.SetVar("duelCanPrayer", !prayerAllowed)
 		//player.SetVar("duelCanEquip", !equipmentAllowed)
 		player.SendPacket(world.DuelOptions(player))
-		
+
 		//target.SetVar("duelCanRetreat", !retreatsAllowed)
 		//target.SetVar("duelCanMagic", !magicAllowed)
 		//target.SetVar("duelCanPrayer", !prayerAllowed)
 		//target.SetVar("duelCanEquip", !equipmentAllowed)
 		target.SendPacket(world.DuelOptions(target))
 	})
-	AddHandler("dueldecline", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("dueldecline", func(player *world.Player, p *net.Packet) {
 		if !player.IsDueling() {
 			log.Suspicious.Printf("%v attempted to decline a duel it was not in!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		target := player.DuelTarget()
+		target := player.Duel.Target
 		if target == nil {
 			log.Suspicious.Printf("%v attempted to decline a duel with a non-existent target!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		if !target.IsDueling() || target.DuelTarget() != player {
+		if !target.IsDueling() || target.Duel.Target != player {
 			log.Suspicious.Printf("Players{ %v;2:%v } involved in duel with apparently bad state!\n", player.String(), target.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
@@ -193,21 +195,21 @@ func init() {
 		target.Message(player.Username() + " has declined the duel")
 		target.SendPacket(world.DuelClose)
 	})
-	AddHandler("duelaccept", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("duelaccept", func(player *world.Player, p *net.Packet) {
 		if !player.IsDueling() {
 			log.Suspicious.Printf("%v attempted to decline a duel it was not in!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		target := player.DuelTarget()
+		target := player.Duel.Target
 		if target == nil {
 			log.Suspicious.Printf("%v attempted to accept a duel with a non-existent target!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		if !target.IsDueling() || target.DuelTarget() != player {
+		if !target.IsDueling() || target.Duel.Target != player {
 			log.Suspicious.Printf("Players{ %v;2:%v } involved in duel with apparently bad state!\n", player.String(), target.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
@@ -227,21 +229,21 @@ func init() {
 			target.SendPacket(world.DuelTargetAccept(true))
 		}
 	})
-	AddHandler("duelconfirmaccept", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("duelconfirmaccept", func(player *world.Player, p *net.Packet) {
 		if !player.IsDueling() || !player.DuelAccepted(1) {
 			log.Suspicious.Printf("%v attempted to accept a duel confirmation it was not in!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		target := player.DuelTarget()
+		target := player.Duel.Target
 		if target == nil {
 			log.Suspicious.Printf("%v involved in duel with no target!\n", player.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
 			return
 		}
-		if !target.IsDueling() || target.DuelTarget() != player || !target.DuelAccepted(1) {
+		if !target.IsDueling() || target.Duel.Target != player || !target.DuelAccepted(1) {
 			log.Suspicious.Printf("Players{ 1:%v; 2:%v } involved in duel with apparently bad state!\n", player.String(), target.String())
 			player.ResetDuel()
 			player.SendPacket(world.DuelClose)
@@ -259,7 +261,7 @@ func init() {
 			target.ResetDuelAccepted()
 			if !player.VarBool("duelCanPrayer", true) {
 				for i := 0; i < 14; i++ {
-					player.PrayerOff(i)
+					player.DeactivatePrayer(i)
 				}
 				player.SendPrayers()
 				player.Message("You cannot use prayer in this duel!")
@@ -275,7 +277,7 @@ func init() {
 			}
 			if !target.VarBool("duelCanPrayer", true) {
 				for i := 0; i < 14; i++ {
-					target.PrayerOff(i)
+					target.DeactivatePrayer(i)
 				}
 				target.SendPrayers()
 				target.Message("You cannot use prayer in this duel!")

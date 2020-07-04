@@ -12,17 +12,20 @@ package handlers
 import (
 	"strconv"
 
+	"github.com/spkaeros/rscgo/pkg/game"
+
+	"github.com/spkaeros/rscgo/pkg/definitions"
 	"github.com/spkaeros/rscgo/pkg/game/net"
 	"github.com/spkaeros/rscgo/pkg/game/world"
 	"github.com/spkaeros/rscgo/pkg/log"
 )
 
 func init() {
-	AddHandler("shopbuy", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("shopbuy", func(player *world.Player, p *net.Packet) {
 		if player.HasState(world.StateShopping) {
 			id := p.ReadUint16()
 			price := p.ReadUint32()
-			
+
 			shop := player.CurrentShop()
 			if shop == nil || player.State()&world.StateShopping != world.StateShopping {
 				log.Suspicious.Println(player, "tried purchasing from a shop but is not apparently accessing any shops.")
@@ -46,7 +49,7 @@ func init() {
 				player.Message("You don't have enough coins")
 				return
 			}
-			
+
 			player.AddItem(id, 1)
 			shop.Remove(id, 1)
 			player.PlaySound("coins")
@@ -56,7 +59,7 @@ func init() {
 			})
 		}
 	})
-	AddHandler("shopsell", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("shopsell", func(player *world.Player, p *net.Packet) {
 		if player.HasState(world.StateShopping) {
 			id := p.ReadUint16()
 			price := p.ReadUint32()
@@ -72,7 +75,7 @@ func init() {
 				return
 			}
 
-			realPrice := int(world.Price(world.ItemDefs[id].BasePrice).Scale(shop.BasePurchasePercent + shop.DeltaPercentModID(id)))
+			realPrice := int(world.Price(definitions.Item(id).BasePrice).Scale(shop.BasePurchasePercent + shop.DeltaPercentModID(id)))
 			if price != realPrice {
 				log.Suspicious.Println(player, "tried buying item["+strconv.Itoa(id)+"] for ["+strconv.Itoa(price)+"gp] but actual price is currently ["+strconv.Itoa(realPrice)+"gp]")
 				return
@@ -90,7 +93,7 @@ func init() {
 			}
 		}
 	})
-	AddHandler("shopclose", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("shopclose", func(player *world.Player, p *net.Packet) {
 		if player.HasState(world.StateShopping) {
 			player.CloseShop()
 		}

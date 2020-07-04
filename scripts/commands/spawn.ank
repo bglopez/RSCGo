@@ -2,6 +2,7 @@ bind = import("bind")
 log = import("log")
 world = import("world")
 regexp = import("regexp")
+strings = import("strings")
 
 bind.command("npc", func(player, args) {
 	if len(args) < 1 {
@@ -38,51 +39,49 @@ bind.command("npc", func(player, args) {
 })
 
 bind.command("item", func(player, args) {
-	go func() {
-		id = -1
-		amount = 1
-		if len(args) > 1 {
-			amount = toInt(args[1])
+	id = -1
+	amount = 1
+	if len(args) > 1 {
+		amount = toInt(args[1])
+	}
+	if regexp.MustCompile("^[0-9]+$").MatchString(args[0]) {
+		id = toInt(args[0])
+	} else {
+		ids = fuzzyItem(args[0])
+		if len(ids) < 1 {
+			player.Message("Could not fuzzysearch a match for " + args[0])
+			return
 		}
-        if regexp.MustCompile("^[0-9]+$").MatchString(args[0]) {
-                id = toInt(args[0])
-        } else {
-			ids = fuzzyFindItem(args[0])
-			if len(ids) < 1 {
-				player.Message("Could not fuzzysearch a match for " + args[0])
+		if len(ids) >= 27 {
+			player.Message("Search name too ambiguous: Too many results matched(" + len(ids) + ")")
+			return
+		}
+
+		if len(ids) > 1 {
+			names = []
+			for match in ids {
+				names += match.name
+			}
+			player.Message("Choose which item you wish to spawn")
+			reply = player.OpenOptionMenu(names...)
+			if reply == -1 {
+				player.Message("::item menu timeout")
 				return
 			}
-			if len(ids) >= 27 {
-				player.Message("Search name too ambiguous: Too many results matched(" + len(ids) + ")")
+
+
+			id = toInt(ids[toInt(reply)].id)
+		} else {
+			id = toInt(ids[0].id)
+			if id < 0 || id > 1289 {
+				player.Message("Item ID out of bounds.  Must be between 0 and 1289, or use its name eg 'santas hat'")
 				return
 			}
-	
-			if len(ids) > 1 {
-				names = []
-				for match in ids {
-					names += match.name
-				}
-				player.Message("Choose which item you wish to spawn")
-				reply = player.OpenOptionMenu(names...)
-				if reply == -1 {
-					player.Message("::item menu timeout")
-					return
-				}
-	
-	
-				id = toInt(ids[toInt(reply)].id)
-			} else {
-				id = toInt(ids[0].id)
-				if id < 0 || id > 1289 {
-					player.Message("Item ID out of bounds.  Must be between 0 and 1289, or use its name eg 'santas hat'")
-					return
-				}
-			}
-	    }
-		if id >= 0 && id <= 1289 {
-			player.AddItem(id, amount)
 		}
-	}()
+    }
+	if id >= 0 && id <= 1289 {
+		player.AddItem(id, amount)
+	}
 })
 
 bind.command("object", func(player, args) {
@@ -97,11 +96,11 @@ bind.command("object", func(player, args) {
 		if id < 0 || id >= len(objectDefs) {
 			return
 		}
-		dir = North
+		dir = NORTH
 		if len(args) > 1 {
 			dir = parseDirection(args[1])
 		}
-		world.addObject(newObject(id, North, x, y, false))
+		world.addObject(newObject(id, NORTH, x, y, false))
 		log.cmdf("'%v' spawned a new object{id:%v, dir:%v} at %v,%v", player.String(), id, dir, x, y)
 	} catch e {
 		player.Message("Invalid syntax.  Usage: ::object <id> (<dir>)")
@@ -140,11 +139,11 @@ bind.command("boundary", func(player, args) {
 		if id < 0 || id >= len(boundaryDefs) {
 			return
 		}
-		dir = North
+		dir = NORTH
 		if len(args) > 1 {
 			dir = parseDirection(args[1])
 		}
-		world.addObject(newObject(id, North, x, y, true))
+		world.addObject(newObject(id, NORTH, x, y, true))
 		log.cmdf("'%v' spawned a new boundary{id:%v, dir:%v} at %v,%v", player.String(), id, dir, x, y)
 	} catch e {
 		player.Message("Invalid syntax.  Usage: ::boundary <id> (<dir>)")

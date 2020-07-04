@@ -10,13 +10,15 @@
 package handlers
 
 import (
+	"github.com/spkaeros/rscgo/pkg/game"
+	"github.com/spkaeros/rscgo/pkg/definitions"
 	"github.com/spkaeros/rscgo/pkg/game/net"
 	"github.com/spkaeros/rscgo/pkg/game/world"
 	"github.com/spkaeros/rscgo/pkg/log"
 )
 
 func init() {
-	AddHandler("invwield", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("invwield", func(player *world.Player, p *net.Packet) {
 		if player.IsDueling() && player.IsFighting() && !player.DuelEquipment() {
 			player.Message("You can not use equipment in this duel")
 			return
@@ -24,7 +26,7 @@ func init() {
 
 		index := p.ReadUint16()
 		if index < 0 || index > player.Inventory.Size() {
-			log.Suspicious.Printf("Player[%v] tried to wield an item with an out-of-bounds inventory index: %d\n", player, index)
+			log.Cheatf("Player[%v] tried to wield an item with an out-of-bounds inventory index: %d\n", player, index)
 			return
 		}
 
@@ -35,10 +37,10 @@ func init() {
 
 		player.EquipItem(item)
 	})
-	AddHandler("removeitem", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("removeitem", func(player *world.Player, p *net.Packet) {
 		index := p.ReadUint16()
 		if index < 0 || index > player.Inventory.Size() {
-			log.Suspicious.Printf("Player[%v] tried to unwield an item with an out-of-bounds inventory index: %d\n", player, index)
+			log.Cheatf("Player[%v] tried to unwield an item with an out-of-bounds inventory index: %d\n", player, index)
 			return
 		}
 
@@ -50,41 +52,36 @@ func init() {
 		player.DequipItem(item)
 		player.PlaySound("click")
 	})
-	AddHandler("takeitem", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("takeitem", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
 		x := p.ReadUint16()
 		y := p.ReadUint16()
 		if x < 0 || x >= world.MaxX || y < 0 || y >= world.MaxY {
-			log.Suspicious.Printf("%v attempted to pick up an item at an invalid location: [%d,%d]\n", player, x, y)
+			log.Cheatf("%v attempted to pick up an item at an invalid location: [%d,%d]\n", player, x, y)
 			return
 		}
 
 		id := p.ReadUint16()
-		if id < 0 || id > len(world.ItemDefs)-1 {
-			log.Suspicious.Printf("%v attempted to pick up an item with an out-of-bounds ID: %d\n", player, id)
+		if id < 0 || id > len(definitions.Items)-1 {
+			log.Cheatf("%v attempted to pick up an item with an out-of-bounds ID: %d\n", player, id)
 			return
 		}
 
-		p.ReadUint16() // Useless? this variable is for what affect we are applying to the ground item, e.g casting, using item with
+		p.ReadUint16() // Unused in this opcode this variable is what affect-type we are applying to the ground item, e.g casting, using item with, etc...but we are not using any affects
 
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.Busy() {
-				return true
+				return false
 			}
 
 			item := world.GetItem(x, y, id)
 			if item == nil || !item.VisibleTo(player) {
-				log.Suspicious.Printf("%v attempted to pick up an item that doesn't exist: %s@{%d,%d}\n", player, world.ItemDefs[id].Name, x, y)
-				return true
+				log.Cheatf("%v attempted to pick up an item that doesn't exist: %s@{%d,%d}\n", player, definitions.Items[id].Name, x, y)
+				return false
 			}
-			
-			if !player.Inventory.CanHold(item.ID, item.Amount) {
-				player.Message("You do not have room for that item in your inventory.")
-				return true
-			}
-			
+
 			maxDelta := 0
 			if world.IsTileBlocking(x, y, 0x40, false) {
 				maxDelta++
@@ -92,36 +89,41 @@ func init() {
 			if delta := player.Delta(item.Location); delta > maxDelta || delta == 1 && !player.ReachableCoords(item.X(), item.Y()) {
 				return player.FinishedPath()
 			}
-			
+
+			if !player.Inventory.CanHold(item.ID, item.Amount) {
+				player.Message("You do not have room for that item in your inventory.")
+				return false
+			}
+
 			player.ResetPath()
 			item.Remove()
 			player.Inventory.Add(item.ID, item.Amount)
 			player.SendInventory()
 			player.PlaySound("takeobject")
-			return true
+			return false
 		})
 	})
-	AddHandler("dropitem", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("dropitem", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
 		index := p.ReadUint16()
 		// Just to prevent drops mid-path, and perform drop on path completion
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.Busy() {
-				return true
+				return false
 			}
 			if !player.FinishedPath() {
-				return false
+				return true
 			}
 
 			if player.Inventory.Size() < index {
-				return true
+				return false
 			}
 
 			item := player.Inventory.Get(index)
 			if !player.Inventory.Remove(index) {
-				return true
+				return false
 			}
 			world.AddItem(world.NewGroundItemFor(player.UsernameHash(), item.ID, item.Amount, player.X(), player.Y()))
 			player.PlaySound("dropobject")
@@ -129,7 +131,7 @@ func init() {
 			return true
 		})
 	})
-	AddHandler("invaction1", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("invaction1", func(player *world.Player, p *net.Packet) {
 		index := p.ReadUint16()
 		item := player.Inventory.Get(index)
 		if item == nil || player.Busy() || player.IsFighting() {

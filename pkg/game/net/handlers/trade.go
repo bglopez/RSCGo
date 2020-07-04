@@ -10,18 +10,19 @@
 package handlers
 
 import (
+	"github.com/spkaeros/rscgo/pkg/game"
 	"github.com/spkaeros/rscgo/pkg/game/net"
 	"github.com/spkaeros/rscgo/pkg/game/world"
 	"github.com/spkaeros/rscgo/pkg/log"
 )
 
 func init() {
-	AddHandler("tradereq", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("tradereq", func(player *world.Player, p *net.Packet) {
 		if player.Busy() {
 			return
 		}
 		index := p.ReadUint16()
-		p1, ok := world.Players.FromIndex(index)
+		p1, ok := world.Players.FindIndex(index)
 		if !ok {
 			log.Suspicious.Printf("%v attempted to trade a player that does not exist.\n", player.String())
 			return
@@ -54,14 +55,14 @@ func init() {
 			p1.Message(player.Username() + " wishes to trade with you.")
 		}
 	})
-	AddHandler("tradeupdate", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("tradeupdate", func(player *world.Player, p *net.Packet) {
 		if !player.IsTrading() {
 			log.Suspicious.Printf("%v attempted to decline a non-existent trade!\n", player.String())
 			player.ResetTrade()
 			player.SendPacket(world.TradeClose)
 			return
 		}
-		c1, ok := world.Players.FromIndex(player.TradeTarget())
+		c1, ok := world.Players.FindIndex(player.TradeTarget())
 		if !ok {
 			log.Suspicious.Printf("%v attempted to update a trade with a non-existent target!\n", player.String())
 			player.ResetTrade()
@@ -103,14 +104,14 @@ func init() {
 			player.TradeOffer.Add(p.ReadUint16(), p.ReadUint32())
 		}
 	})
-	AddHandler("tradedecline", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("tradedecline", func(player *world.Player, p *net.Packet) {
 		if !player.IsTrading() {
 			log.Suspicious.Printf("%v attempted to decline a trade it was not in!\n", player.String())
 			player.ResetTrade()
 			player.SendPacket(world.TradeClose)
 			return
 		}
-		c1, ok := world.Players.FromIndex(player.TradeTarget())
+		c1, ok := world.Players.FindIndex(player.TradeTarget())
 		if !ok {
 			log.Suspicious.Printf("%v attempted to decline a trade with a non-existent target!\n", player.String())
 			player.ResetTrade()
@@ -125,14 +126,14 @@ func init() {
 		c1.Message(player.Username() + " has declined the trade.")
 		c1.SendPacket(world.TradeClose)
 	})
-	AddHandler("tradeaccept", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("tradeaccept", func(player *world.Player, p *net.Packet) {
 		if !player.IsTrading() {
 			log.Suspicious.Printf("%v attempted to accept a trade it was not in!\n", player.String())
 			player.ResetTrade()
 			player.SendPacket(world.TradeClose)
 			return
 		}
-		c1, ok := world.Players.FromIndex(player.TradeTarget())
+		c1, ok := world.Players.FindIndex(player.TradeTarget())
 		if !ok {
 			log.Suspicious.Printf("%v attempted to accept a trade with a non-existent target!\n", player.String())
 			player.ResetTrade()
@@ -155,14 +156,14 @@ func init() {
 			c1.SendPacket(world.TradeTargetAccept(true))
 		}
 	})
-	AddHandler("tradeconfirmaccept", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("tradeconfirmaccept", func(player *world.Player, p *net.Packet) {
 		if !player.IsTrading() || !player.VarBool("trade1accept", false) {
 			log.Suspicious.Printf("%v attempted to accept a trade confirmation it was not in!\n", player.String())
 			player.ResetTrade()
 			player.SendPacket(world.TradeClose)
 			return
 		}
-		target, ok := world.Players.FromIndex(player.TradeTarget())
+		target, ok := world.Players.FindIndex(player.TradeTarget())
 		if !ok {
 			log.Suspicious.Printf("%v attempted to accept a trade confirmation with a non-existent target!\n", player.String())
 			player.ResetTrade()

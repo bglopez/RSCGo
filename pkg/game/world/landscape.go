@@ -10,33 +10,24 @@
 package world
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sync"
 
 	"github.com/spkaeros/rscgo/pkg/config"
+	"github.com/spkaeros/rscgo/pkg/definitions"
 	"github.com/spkaeros/rscgo/pkg/jag"
 	"github.com/spkaeros/rscgo/pkg/log"
 	"github.com/spkaeros/rscgo/pkg/strutil"
 )
 
-//TileData Represents a single tile in the game's landscape.
-/*
-	DiagonalWalls int
-	HorizontalWalls byte
-	VerticalWalls byte
-	GroundElevation byte
-	Roofs byte
-	GroundTexture byte
-GroundOverlay byte
-*/
-type TileData struct {
-	CollisionMask int16
-}
+//CollisionMask Represents a single tile in the game's landscape.
+type CollisionMask int16
 
 //Sector Represents a sector of 48x48(2304) tiles in the game's landscape.
 type Sector struct {
-	Tiles []TileData
+	Tiles []CollisionMask
 }
 
 //Sectors A map to store landscape sectors by their hashed file name.
@@ -48,94 +39,19 @@ var SectorsLock sync.RWMutex
 func LoadCollisionData() {
 	archive := jag.New(config.DataDir() + string(os.PathSeparator) + "landscape.jag")
 
-	entryFileCaret := 0
-	metaDataCaret := 0
+	fileOffset := 0
+	metaDataOffset := 0
 	// Sectors begin at: offsetX=48, offsetY=96
 	for i := 0; i < archive.FileCount; i++ {
-		id := int(uint32(archive.MetaData[metaDataCaret]&0xFF)<<24 | uint32(archive.MetaData[metaDataCaret+1]&0xFF)<<16 | uint32(archive.MetaData[metaDataCaret+2]&0xFF)<<8 | uint32(archive.MetaData[metaDataCaret+3]&0xFF))
-		startCaret := entryFileCaret
-		entryFileCaret += int(uint32(archive.MetaData[metaDataCaret+7]&0xFF)<<16 | uint32(archive.MetaData[metaDataCaret+8]&0xFF)<<8 | uint32(archive.MetaData[metaDataCaret+9]&0xFF))
+		id := int(binary.BigEndian.Uint32(archive.MetaData[metaDataOffset:]))
+		compSz :=  int(uint32(archive.MetaData[metaDataOffset+7]&0xFF)<<16 | uint32(archive.MetaData[metaDataOffset+8]&0xFF)<<8 | uint32(archive.MetaData[metaDataOffset+9]&0xFF))
 		SectorsLock.Lock()
-		Sectors[id] = loadSector(archive.FileData[startCaret:entryFileCaret])
+		Sectors[id] = loadSector(archive.FileData[fileOffset:fileOffset+compSz])
 		SectorsLock.Unlock()
-		metaDataCaret += 10
+		metaDataOffset += 10
+		fileOffset += compSz
 	}
 }
-
-type TileDefinition struct {
-	Color   int
-	Visible int
-	Blocked int
-}
-
-var TileDefs []TileDefinition
-
-//BoundaryDefs This holds the defining characteristics for all of the game's boundary scene objects, ordered by ID.
-var BoundaryDefs []BoundaryDefinition
-
-//BoundaryDefinition This represents a single definition for a single boundary object in the game.
-type BoundaryDefinition struct {
-	ID          int
-	Name        string
-	Commands    [2]string
-	Description string
-	Dynamic     bool
-	Solid       bool
-}
-
-const (
-	OverlayBlank = iota
-	//OverlayGravel Used for roads, ID 1
-	OverlayGravel
-	//OverlayWater Used for regular water, ID 2
-	OverlayWater
-	//OverlayWoodFloor Used for the floors of buildings, ID 3
-	OverlayWoodFloor
-	//OverlayBridge Used for bridges, suspends wood floor over water, ID 4
-	OverlayBridge
-	//OverlayStoneFloor Used for the floors of buildings, ID 5
-	OverlayStoneFloor
-	//OverlayRedCarpet Used for the floors of buildings, ID 6
-	OverlayRedCarpet
-	//OverlayDarkWater Used for dark, swampy water, ID 7
-	OverlayDarkWater
-	//OverlayBlack Used for empty parts of upper planes, ID 8
-	OverlayBlack
-	//OverlayWhite Used as a separator, e.g for edge of water, mountains, etc.  ID 9
-	OverlayWhite
-	//OverlayBlack2 Not sure where it is used, ID 10
-	OverlayBlack2
-	//OverlayLava Used in dungeons and on Karamja/Crandor as lava, ID 11
-	OverlayLava
-	//OverlayBridge2 Used for a specific type of bridge, ID 12
-	OverlayBridge2
-	//OverlayBlueCarpet Used for the floors of buildings, ID 13
-	OverlayBlueCarpet
-	//OverlayPentagram Used for certain questing purposes, ID 14
-	OverlayPentagram
-	//OverlayPurpleCarpet Used for the floors of buildings, ID 15
-	OverlayPurpleCarpet
-	//OverlayBlack3 Not sure what it is used for, ID 16, traversable
-	OverlayBlack3
-	//OverlayStoneFloorLight Used for the entrance to temple of ikov, ID 17
-	OverlayStoneFloorLight
-	//OverlayUnknown Not sure what this is yet, ID 18
-	OverlayUnknown
-	//OverlayBlack4 Not sure what it is used for, ID 19
-	OverlayBlack4
-	//OverlayAgilityLog Blank suspended tile over blackness for agility challenged, ID 20
-	OverlayAgilityLog
-	//OverlayAgilityLog Blank suspended tile over blackness for agility challenged, ID 21
-	OverlayAgilityLog2
-	//OverlayUnknown2 Not sure what this is yet, ID 22
-	OverlayUnknown2
-	//OverlaySandFloor Used for sand floor, ID 23
-	OverlaySandFloor
-	//OverlayMudFloor Used for mud floor, ID 24
-	OverlayMudFloor
-	//OverlaySandFloor Used for water floor, ID 25
-	OverlayWaterFloor
-)
 
 const (
 	//ClipNorth Bitmask to represent a wall to the north.
@@ -177,18 +93,18 @@ func ClipBit(direction int) int {
 // toward the given x,y coordinates.
 // Returns: [2]byte {verticalMasks, horizontalMasks}
 func (l Location) Masks(x, y int) (masks [2]byte) {
-	if x > l.X() {
-		masks[0] |= ClipSouth
-	} else {
-		masks[0] |= ClipNorth
-	}
 	if y > l.Y() {
+		masks[0] |= ClipNorth
+	} else if y < l.Y() {
+		masks[0] |= ClipSouth
+	}
+	if x > l.X() {
 		masks[1] |= ClipEast
-	} else {
+	} else if x < l.X() {
 		masks[1] |= ClipWest
 	}
 	// diags and solid objects are checked for automatically in the functions that you'd use this with, so
-	return
+	return masks
 }
 
 //
@@ -198,11 +114,11 @@ func (l Location) Mask(toward Location) byte {
 }
 
 /*
-var blockedOverlays = [...]int{OverlayWater, OverlayDarkWater, OverlayBlack, OverlayWhite, OverlayLava, OverlayBlack2, OverlayBlack3, OverlayBlack4}
+var blockedOverlays = [...]int{OverlayWater, definitions.OverlayDarkWater, definitions.OverlayBlack, definitions.OverlayWhite, definitions.OverlayLava, definitions.OverlayBlack2, definitions.OverlayBlack3, definitions.OverlayBlack4}
 
 func isOverlayBlocked(overlay int) bool {
 	for _, v := range blockedOverlays {
-		if v == overlay {
+		if v == definitions.Overlay {
 			return true
 		}
 	}
@@ -213,13 +129,10 @@ func IsTileBlocking(x, y int, bit byte, current bool) bool {
 	return CollisionData(x, y).blocked(bit, current)
 }
 
-func (t TileData) blocked(bit byte, current bool) bool {
-	if t.CollisionMask&int16(bit) != 0 {
-		return true
-	}
+func (t CollisionMask) blocked(bit byte, current bool) bool {
 	// Diagonal walls (/, \) and impassable scenary objects (|=|) both effectively disable the occupied location
 	// TODO: Is overlay clipping finished?
-	return !current && (t.CollisionMask & (ClipSwNe | ClipSeNw | ClipFullBlock)) != 0
+	return t&CollisionMask(bit) != 0 || (!current && (t&(ClipSwNe|ClipSeNw|ClipFullBlock)) != 0)
 }
 
 func sectorName(x, y int) string {
@@ -235,34 +148,30 @@ func sectorFromCoords(x, y int) *Sector {
 		return s
 	}
 	// Default to returning a blank sector filled with zero-value tiles.
-	return &Sector{Tiles: make([]TileData, 2304)}
+	return &Sector{Tiles: make([]CollisionMask, 2304)}
 }
 
-func (s *Sector) tile(x, y int) TileData {
+func (s *Sector) tile(x, y int) CollisionMask {
 	areaX := (2304 + x) % RegionSize
 	areaY := (1776 + y - (944 * ((y + 100) / 944))) % RegionSize
 	if len(s.Tiles) <= 0 {
-		return TileData{}
+		return 0
 	}
 	return s.Tiles[areaX*RegionSize+areaY]
 }
 
-func CollisionData(x, y int) TileData {
-	//sector := sectorFromCoords(x, y)
-	//if sector == nil {
-	//	return TileData{CollisionMask: ClipFullBlock}
-	//}
+func CollisionData(x, y int) CollisionMask {
 	return sectorFromCoords(x, y).tile(x, y)
 }
 
 //loadSector Parses raw data into data structures that make up a 48x48 map sector.
 func loadSector(data []byte) (s *Sector) {
-	// If we were given less than the length of a decompressed, raw map sector
+	// 48*48=2304 tiles per sector and 10 bytes per tile makes each sector 23040 byte
 	if len(data) < 23040 {
 		log.Warning.Printf("Too short sector data: %d\n", len(data))
 		return nil
 	}
-	s = &Sector{Tiles: make([]TileData, 2304)}
+	s = &Sector{Tiles: make([]CollisionMask, 2304)}
 	offset := 0
 
 	blankCount := 0
@@ -270,37 +179,37 @@ func loadSector(data []byte) (s *Sector) {
 		for y := 0; y < RegionSize; y++ {
 			groundTexture := data[offset+1] & 0xFF
 			groundOverlay := data[offset+2] & 0xFF
-			//			roofTexture := data[offset+3] & 0xFF
+			//roofTexture := data[offset+3] & 0xFF
 			horizontalWalls := data[offset+4] & 0xFF
 			verticalWalls := data[offset+5] & 0xFF
-			diagonalWalls := int(uint32(data[offset+6]&0xFF)<<24 | uint32(data[offset+7]&0xFF)<<16 | uint32(data[offset+8]&0xFF)<<8 | uint32(data[offset+9]&0xFF))
+			diagonalWalls := binary.BigEndian.Uint32(data[offset+6:])
 			if groundOverlay == 250 {
 				// -6 overflows to 250, and is water tile
-				groundOverlay = OverlayWater
+				groundOverlay = definitions.OverlayWater
 			}
-			if (groundOverlay == 0 && (groundTexture) == 0) || groundOverlay == OverlayWater || groundOverlay == OverlayBlack {
+			if (groundOverlay == 0 && (groundTexture) == 0) || groundOverlay == definitions.OverlayWater || groundOverlay == definitions.OverlayBlack {
 				blankCount++
 			}
 			tileIdx := x*RegionSize + y
-			if groundOverlay > 0 && int(groundOverlay) < len(TileDefs) && TileDefs[groundOverlay-1].Blocked != 0 {
-				s.Tiles[tileIdx].CollisionMask |= ClipFullBlock
+			if groundOverlay > 0 && int(groundOverlay) < len(definitions.TileOverlays) && definitions.TileOverlays[groundOverlay-1].Blocked != 0 {
+				s.Tiles[tileIdx] |= ClipFullBlock
 			}
-			walls := [] []int {
-				[]int{ int(verticalWalls)-1, ClipNorth, y },
-				[]int{ int(horizontalWalls)-1, ClipEast,x },
+			walls := [][]int{
+				{int(verticalWalls) - 1, ClipNorth, y},
+				{int(horizontalWalls) - 1, ClipEast, x},
 			}
 			for i := 0; i < 2; i++ {
 				if walls[i][0] < 0 {
 					continue
 				}
-				if boundary := walls[i][0]; boundary > len(BoundaryDefs)-1 {
-					log.Debugf("Out of bounds indexing attempted into BoundaryDefs[%d]; while upper bound is currently %d\n", boundary, len(BoundaryDefs)-1)
+				if boundary := walls[i][0]; boundary > len(definitions.BoundaryObjects)-1 {
+					log.Debugf("Out of bounds indexing attempted into definitions.BoundaryObjects[%d]; while upper bound is currently %d\n", boundary, len(definitions.BoundaryObjects)-1)
 					continue
 				}
-				if wall := BoundaryDefs[walls[i][0]]; !wall.Dynamic && wall.Solid {
-					s.Tiles[x*RegionSize+y].CollisionMask |= int16(walls[i][1])
+				if wall := definitions.BoundaryObjects[walls[i][0]]; !wall.Dynamic && wall.Solid {
+					s.Tiles[x*RegionSize+y] |= CollisionMask(walls[i][1])
 					if walls[i][2] > 0 {
-						s.Tiles[(x-i)*RegionSize+((y-1)+i)].CollisionMask |= int16(walls[i][1]<<2)
+						s.Tiles[(x-i)*RegionSize+((y-1)+i)] |= CollisionMask(walls[i][1] << 2)
 					}
 				}
 			}
@@ -310,12 +219,12 @@ func loadSector(data []byte) (s *Sector) {
 					diagonalWalls -= 12000
 				}
 				diagonalWalls -= 1
-				if wall := BoundaryDefs[diagonalWalls]; !wall.Dynamic && wall.Solid {
+				if wall := definitions.BoundaryObjects[diagonalWalls]; !wall.Dynamic && wall.Solid {
 					if diagonalWalls > 12000 {
-						s.Tiles[tileIdx].CollisionMask |= ClipSwNe
+						s.Tiles[tileIdx] |= ClipSwNe
 					} else {
 						// diagonal that blocks: SE<->NW (/ aka |‾ or _|)
-						s.Tiles[tileIdx].CollisionMask |= ClipSeNw
+						s.Tiles[tileIdx] |= ClipSeNw
 					}
 				}
 			}

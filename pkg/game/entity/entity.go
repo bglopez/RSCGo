@@ -19,8 +19,8 @@ const (
 	TypeItem                        // 16
 	TypeGroundItem                  // 32
 
-	TypeMob = TypePlayer|TypeNpc
-	TypeEntity = TypeObject|TypeDoor|TypeItem|TypeGroundItem
+	TypeMob    = TypePlayer | TypeNpc
+	TypeEntity = TypeObject | TypeDoor | TypeItem | TypeGroundItem
 )
 
 type Entity interface {
@@ -32,4 +32,5 @@ type Entity interface {
 type Location interface {
 	X() int
 	Y() int
+	Point() Location
 }

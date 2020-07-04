@@ -153,7 +153,7 @@ func RunScripts() {
 	}
 
 	err = filepath.Walk("./scripts", func(path string, info os.FileInfo, err error) error {
-		if !info.Mode().IsDir() && strings.HasSuffix(path, "ank") && !strings.Contains(path, "definitions") && !strings.Contains(path, "lib") {
+		if !info.Mode().IsDir() && strings.HasSuffix(path, "ank") && !strings.Contains(path, "defyyyyyyyt6") && !strings.Contains(path, "lib") {
 
 			_, err := vm.Execute(ScriptEnv(), &vm.Options{Debug: true}, "bind = import(\"bind\")\nworld = import(\"world\")\nlog = import(\"log\")\nids = import(\"ids\")\n\n"+load(path))
 			//stmt, err := parser.ParseSrc(load(path))
@@ -163,7 +163,7 @@ func RunScripts() {
 			//// Note: Still want to run the code even after a parse error to see what happens
 			//_, err = vm.Run(ScriptEnv(), &vm.Options{Debug: true}, stmt)
 			if err != nil {
-				log.Warning.Println("Anko error ['"+path+"']:", err)
+				log.Warn("Anko error ['"+path+"']:", err)
 				//				log.Info.Println(env.String())
 				return nil
 			}
@@ -182,12 +182,12 @@ func RunScripts() {
 func load(filePath string) string {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Warning.Println("Error opening script file:", err)
+		log.Warn("Error opening script file:", err)
 		return ""
 	}
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Warning.Println("Error reading script file:", err)
+		log.Warn("Error reading script file:", err)
 		return ""
 	}
 

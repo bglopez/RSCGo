@@ -1,11 +1,11 @@
 bind = import("bind")
-load("scripts/definitions/magic.ank")
+load("scripts/def/magic.ank")
 
 for idx in range(len(defs)) {
 	fn = defs[idx].handler
 	if fn == nil {
 		bind.spell(idx, func(player, spell) {
-			player.Message("Not yet")
+			player.Message("Not yet added")
 		})
 		continue
 	}

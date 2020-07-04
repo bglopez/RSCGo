@@ -10,13 +10,15 @@
 package handlers
 
 import (
+	"github.com/spkaeros/rscgo/pkg/game"
+	"github.com/spkaeros/rscgo/pkg/definitions"
 	"github.com/spkaeros/rscgo/pkg/game/net"
 	"github.com/spkaeros/rscgo/pkg/game/world"
 	"github.com/spkaeros/rscgo/pkg/log"
 )
 
 func init() {
-	AddHandler("objectaction", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("objectaction", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -27,7 +29,7 @@ func init() {
 			log.Suspicious.Printf("Player %v attempted to use a non-existent object at %d,%d\n", player, x, y)
 			return
 		}
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.AtObject(object) {
 				player.ResetPath()
 				player.AddState(world.MSBatching)
@@ -51,7 +53,7 @@ func init() {
 
 		})
 	})
-	AddHandler("objectaction2", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("objectaction2", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -62,7 +64,7 @@ func init() {
 			log.Suspicious.Printf("Player %v attempted to use a non-existent object at %d,%d\n", player, x, y)
 			return
 		}
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.AtObject(object) {
 				player.ResetPath()
 				player.AddState(world.MSBatching)
@@ -86,7 +88,7 @@ func init() {
 			return false
 		})
 	})
-	AddHandler("boundaryaction2", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("boundaryaction2", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -98,7 +100,7 @@ func init() {
 			return
 		}
 		bounds := object.Boundaries()
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if (player.NextTo(bounds[1]) || player.NextTo(bounds[0])) && player.X() >= bounds[0].X() && player.Y() >= bounds[0].Y() && player.X() <= bounds[1].X() && player.Y() <= bounds[1].Y() {
 				player.ResetPath()
 				if player.Busy() || world.GetObject(object.X(), object.Y()) != object {
@@ -124,7 +126,7 @@ func init() {
 			return false
 		})
 	})
-	AddHandler("boundaryaction", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("boundaryaction", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -136,7 +138,7 @@ func init() {
 			return
 		}
 		bounds := object.Boundaries()
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if (player.NextTo(bounds[1]) || player.NextTo(bounds[0])) && player.X() >= bounds[0].X() && player.Y() >= bounds[0].Y() && player.X() <= bounds[1].X() && player.Y() <= bounds[1].Y() {
 				player.ResetPath()
 				if player.Busy() || world.GetObject(object.X(), object.Y()) != object {
@@ -162,7 +164,7 @@ func init() {
 			return false
 		})
 	})
-	AddHandler("talktonpc", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("talktonpc", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -217,7 +219,7 @@ func init() {
 			player.Message("The " + npc.Name() + " does not appear interested in talking")
 		})
 	})
-	AddHandler("invonboundary", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("invonboundary", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -237,7 +239,7 @@ func init() {
 		}
 		invItem := player.Inventory.Get(invIndex)
 		bounds := object.Boundaries()
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.Busy() || world.GetObject(object.X(), object.Y()) != object {
 				// If somehow we became busy, or the object changed before arriving, we do nothing.
 				return true
@@ -262,7 +264,7 @@ func init() {
 			return false
 		})
 	})
-	AddHandler("invonplayer", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("invonplayer", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -274,7 +276,7 @@ func init() {
 			return
 		}
 
-		target, ok := world.Players.FromIndex(targetIndex)
+		target, ok := world.Players.FindIndex(targetIndex)
 		if !ok || target == nil || !target.Connected() {
 			log.Suspicious.Printf("%s attempted to use an inventory item on a player that doesn't exist\n", player.String())
 			return
@@ -284,7 +286,7 @@ func init() {
 			return
 		}
 		invItem := player.Inventory.Get(invIndex)
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.Busy() || !player.Connected() || target == nil || target.Busy() || !target.Connected() {
 				return true
 			}
@@ -311,7 +313,7 @@ func init() {
 			return false
 		})
 	})
-	AddHandler("invonobject", func(player *world.Player, p *net.Packet) {
+	game.AddHandler("invonobject", func(player *world.Player, p *net.Packet) {
 		if player.Busy() || player.IsFighting() {
 			return
 		}
@@ -331,12 +333,12 @@ func init() {
 		invItem := player.Inventory.Get(invIndex)
 		bounds := object.Boundaries()
 		player.WalkTo(object.Location)
-		player.SetDistancedAction(func() bool {
+		player.SetTickAction(func() bool {
 			if player.Busy() || world.GetObject(object.X(), object.Y()) != object {
 				// If somehow we became busy, the object changed before arriving, we do nothing.
 				return true
 			}
-			if world.ObjectDefs[object.ID].CollisionType == 2 || world.ObjectDefs[object.ID].CollisionType == 3 {
+			if definitions.Scenary(object.ID).CollisionType == 2 || definitions.Scenary(object.ID).CollisionType == 3 {
 				if (player.NextTo(bounds[1]) || player.NextTo(bounds[0])) && player.X() >= bounds[0].X() && player.Y() >= bounds[0].Y() && player.X() <= bounds[1].X() && player.Y() <= bounds[1].Y() {
 					player.ResetPath()
 					player.AddState(world.MSBatching)
